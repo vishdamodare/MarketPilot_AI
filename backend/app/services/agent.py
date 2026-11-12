@@ -297,7 +297,11 @@ def ask(c: Ctx, question: str) -> dict:
             return _save(c, question, out)
         except Exception as e:  # LLM failure -> deterministic path, clearly labelled
             trace.clear(); findings.clear()
-            note = f"(LLM unavailable: {type(e).__name__}; using deterministic investigator)\n\n"
+            code = getattr(e, "code", None)
+            why = ("the OpenAI account has no credits (add billing at platform.openai.com)" if code == "insufficient_quota"
+                   else "the OpenAI API key was rejected" if type(e).__name__ == "AuthenticationError"
+                   else type(e).__name__)
+            note = f"(LLM unavailable: {why}; using deterministic investigator)\n\n"
     else:
         note = ""
     parts = []

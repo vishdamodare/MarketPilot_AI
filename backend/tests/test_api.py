@@ -441,6 +441,57 @@ def test_agent_answers_from_records_and_only_drafts_never_submits(seeded):
     assert {t["tool"] for t in prep["tool_calls"]} <= set(__import__("app.services.agent", fromlist=["TOOLS"]).TOOLS)
 
 
+def test_agent_falls_back_and_explains_when_openai_has_no_credits(w, monkeypatch):
+    """Live OpenAI returned 429 insufficient_quota: the agent must still answer (deterministically) and say why."""
+    from app.services import llm
+
+    class OutOfCredit(Exception):
+        code = "insufficient_quota"
+
+    class Broken:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    raise OutOfCredit("429")
+
+    monkeypatch.setattr(llm, "enabled", lambda: True)
+    monkeypatch.setattr(llm, "client", lambda: Broken)
+    w.paid_order(cap="CAP-LLM")
+    out = w.client("admin").post("/api/agent/ask", json={"question": "How much did we earn this month?"})
+    assert out.status_code == 200
+    j = out.json()
+    assert j["mode"] == "deterministic" and "no credits" in j["answer"] and "billing" in j["answer"]
+
+
+def test_agent_llm_tool_calling_loop_runs_audited_tools_and_returns_llm_answer(w, monkeypatch):
+    """Logic of the OpenAI function-calling loop with a fake client (the real API was never reachable: no credits)."""
+    from types import SimpleNamespace as NS
+    from app.services import llm
+
+    calls = []
+
+    def reply(content=None, tool_calls=None):
+        return NS(choices=[NS(message=NS(content=content, tool_calls=tool_calls))])
+
+    def create(**kw):
+        calls.append([m["role"] if isinstance(m, dict) else "assistant" for m in kw["messages"]])
+        if len(calls) == 1:
+            assert any(t["function"]["name"] == "get_marketplace_summary" for t in kw["tools"])
+            return reply(tool_calls=[NS(id="call_1", function=NS(name="get_marketplace_summary", arguments="{}"))])
+        assert kw["messages"][-1]["role"] == "tool" and kw["messages"][-1]["tool_call_id"] == "call_1"  # tool result goes back to the model
+        return reply(content="You earned money.")
+
+    fake = NS(chat=NS(completions=NS(create=create)))
+    monkeypatch.setattr(llm, "enabled", lambda: True)
+    monkeypatch.setattr(llm, "client", lambda: fake)
+    w.paid_order(cap="CAP-LLM2")
+    j = w.client("admin").post("/api/agent/ask", json={"question": "How much did we earn?"}).json()
+    assert j["mode"] == "llm" and j["answer"] == "You earned money."
+    assert [t["tool"] for t in j["tool_calls"]] == ["get_marketplace_summary"] and j["tool_calls"][0]["ok"]
+    assert len(calls) == 2
+
+
 def test_changing_default_commission_does_not_flag_historical_orders(w):
     w.paid_order(price="100.00", cap="CAP-A")
     c = w.client("admin")
