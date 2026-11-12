@@ -24,7 +24,8 @@ export default function Agent() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView?.({ behavior: "smooth" }), [msgs, busy]);
+  // Braces matter: in real browsers scrollIntoView's result must not be returned, or React treats it as the cleanup and the page crashes.
+  useEffect(() => { end.current?.scrollIntoView?.({ behavior: "smooth" }); }, [msgs, busy]);
 
   const ask = async (q: string): Promise<void> => {
     if (!q.trim() || busy) return;

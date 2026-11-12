@@ -216,4 +216,23 @@ describe("AI conversation", () => {
     expect(screen.getByText(/get_financial_risk_summary/)).toBeInTheDocument();
     expect(calls.find((c) => c.key === "POST /agent/ask")?.body).toEqual({ question: "What is putting my marketplace money at risk?" });
   });
+
+  it("does not crash when the browser's scrollIntoView returns a value (regression: effect must not return it)", async () => {
+    const u = userEvent.setup();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    (Element.prototype as any).scrollIntoView = () => Promise.resolve();
+    try {
+      renderPage(<Agent />, {
+        "GET /agent/status": { mode: "deterministic", note: null, tools: [] },
+        "POST /agent/ask": () => ({ mode: "deterministic", answer: "ok answer", findings: [], tool_calls: [] }),
+      });
+      await u.type(await screen.findByLabelText("Ask the agent"), "hi");
+      await u.click(screen.getByRole("button", { name: /Ask/ }));
+      expect(await screen.findByText("ok answer")).toBeInTheDocument();
+      expect(errors.mock.calls.map((c) => String(c[0]))).not.toContainEqual(expect.stringContaining("useEffect must not return"));
+    } finally {
+      delete (Element.prototype as any).scrollIntoView;
+      errors.mockRestore();
+    }
+  });
 });
