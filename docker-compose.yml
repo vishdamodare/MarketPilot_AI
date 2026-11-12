@@ -1,0 +1,21 @@
+# Whole stack locally: docker compose up --build   ->  http://localhost:3000
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_DB: marketpilot, POSTGRES_USER: mp, POSTGRES_PASSWORD: mp }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U mp -d marketpilot"], interval: 5s, retries: 10 }
+  backend:
+    build: ./backend
+    depends_on: { db: { condition: service_healthy } }
+    env_file: [{ path: ./backend/.env, required: false }]   # PayPal keys etc.
+    environment:
+      DATABASE_URL: postgresql://mp:mp@db:5432/marketpilot
+      PORT: "8010"
+    ports: ["8010:8010"]
+  frontend:
+    build: { context: ./frontend, args: { BACKEND_URL: "http://backend:8010" } }
+    depends_on: [backend]
+    ports: ["3000:3000"]
+volumes:
+  pgdata:

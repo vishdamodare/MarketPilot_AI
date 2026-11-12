@@ -7,10 +7,10 @@ All PayPal I/O is in `backend/app/services/paypal.py`: server-side OAuth (client
 | Capability | Endpoint used | Spec check | Where |
 |---|---|---|---|
 | OAuth | `POST /v1/oauth2/token` (Basic, `grant_type=client_credentials`) | ✅ verified | `_auth` |
-| Create order | `POST /v2/checkout/orders` + `PayPal-Request-Id` | ✅ verified | `create_order`, `POST /api/paypal/orders` |
-| Capture order | `POST /v2/checkout/orders/{id}/capture` | ⚠️ unverified (spec truncated) | `capture_order` |
+| Create order | `POST /v2/checkout/orders` + `PayPal-Request-Id` | ✅ verified; **ran live against Sandbox 2026-11-12** (request id is per attempt, so an expired order can be retried) | `create_order`, `POST /api/paypal/orders` |
+| Capture order | `POST /v2/checkout/orders/{id}/capture` | ✅ **ran live against Sandbox 2026-11-12** (COMPLETED, fee read from response) | `capture_order` |
 | Multiparty / partner fee | `payee.merchant_id`, `payment_instruction.platform_fees[]`, `PayPal-Auth-Assertion`, `PayPal-Partner-Attribution-Id` | ⚠️ headers' max length verified; field schemas unverified | `create_order` (only when `PAYPAL_PARTNER_ID` set) |
-| Refund / get capture / get refund | `POST /v2/payments/captures/{id}/refund`, `GET …/refunds/{id}`, `GET …/captures/{id}` | ⚠️ unverified (spec not reachable) | `refund_capture`, RefundGuard |
+| Refund / get capture / get refund | `POST /v2/payments/captures/{id}/refund`, `GET …/refunds/{id}`, `GET …/captures/{id}` | ✅ refund **ran live against Sandbox 2026-11-12** (completed, ledger split correct); get capture/get refund not exercised | `refund_capture`, RefundGuard |
 | Disputes list/get | `GET /v1/customer/disputes`, `/{id}` | ✅ verified | `list_disputes`, `get_dispute` |
 | Provide evidence | `POST /v1/customer/disputes/{id}/provide-evidence` (multipart) | ✅ path/multipart; ⚠️ JSON `input` shape & `evidence_type` values unverified | `provide_evidence` |
 | Accept claim | `POST /v1/customer/disputes/{id}/accept-claim` (multipart) | ✅ path/multipart; ⚠️ spec showed only a document part — our `note`/`accept_claim_reason` fields are unverified | `accept_claim` |

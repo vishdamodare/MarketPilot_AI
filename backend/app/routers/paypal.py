@@ -81,8 +81,9 @@ def create_paypal_order(b: OrderRef, c: Ctx = Depends(ctx("orders.write"))):
     allocs = c.db.query(SellerAllocation).filter_by(order_id=o.id).all()
     seller = c.db.get(Seller, allocs[0].seller_id) if len(allocs) == 1 else None  # multiparty orders here are single-seller
     fee = allocs[0].commission if seller else None
+    attempt = c.db.query(PaypalOrder).filter_by(order_id=o.id).count()  # new request id per attempt, else PayPal replays an expired order
     try:
-        r = paypal.get_client().create_order(amount=o.total, currency=o.currency, reference_id=o.number, request_id=f"mp-order-{o.id}",
+        r = paypal.get_client().create_order(amount=o.total, currency=o.currency, reference_id=o.number, request_id=f"mp-order-{o.id}-{attempt}",
                                              seller_merchant_id=seller.paypal_merchant_id if seller else None, platform_fee=fee)
     except paypal.PayPalError as e:
         _setting(c.db, c.org.id).last_error = str(e)[:300]

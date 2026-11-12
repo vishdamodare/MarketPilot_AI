@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,21 @@ class Settings(BaseSettings):
 
     sync_interval_seconds: int = 900  # background sync cadence; 0 disables the in-process scheduler (use cron: python -m app.jobs)
     smtp_host: str = ""  # empty -> notifications stored in DB only
+
+    @field_validator("database_url")
+    @classmethod
+    def _driver(cls, v: str) -> str:
+        # Hosts (Neon, Render, Heroku) hand out postgres:// or postgresql://; we only ship psycopg 3.
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix):]
+        return v
+
+    @model_validator(mode="after")
+    def _prod_secret(self):
+        if self.cookie_secure and self.secret_key.startswith("dev-only"):
+            raise ValueError("SECRET_KEY must be set to a long random value when COOKIE_SECURE=true")
+        return self
 
     @property
     def paypal_configured(self) -> bool:

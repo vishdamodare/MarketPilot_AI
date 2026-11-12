@@ -1,0 +1,19 @@
+# Render Blueprint for the backend. Database: create a Postgres (Neon free tier works) and paste its URL.
+# The frontend goes on Vercel (see DEPLOY.md).
+services:
+  - type: web
+    name: marketpilot-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    envVars:
+      - { key: DATABASE_URL, sync: false }
+      - { key: SECRET_KEY, generateValue: true }
+      - { key: COOKIE_SECURE, value: "true" }
+      - { key: PAYPAL_BASE_URL, value: https://api-m.sandbox.paypal.com }
+      - { key: PAYPAL_CLIENT_ID, sync: false }
+      - { key: PAYPAL_CLIENT_SECRET, sync: false }
+      - { key: PAYPAL_WEBHOOK_ID, sync: false }
+      - { key: OPENAI_API_KEY, sync: false }
+      - { key: SYNC_INTERVAL_SECONDS, value: "900" }

@@ -239,6 +239,28 @@ def test_sandbox_refund_calls_paypal_and_uses_actual_status(w, monkeypatch):
     assert out["status"] == "processing" and w.db.query(FinancialLedger).filter_by(ref_type="refund").count() == 0
 
 
+def test_retrying_paypal_order_uses_a_new_request_id(w, monkeypatch):
+    """Regression: a fixed PayPal-Request-Id made PayPal replay an expired order forever."""
+    from app.services import paypal
+    ids = []
+
+    class Fake:
+        def create_order(self, **kw):
+            ids.append(kw["request_id"])
+            return {"id": f"PP-{len(ids)}", "status": "CREATED", "links": [{"rel": "approve", "href": "https://x"}]}
+
+    monkeypatch.setattr(paypal, "get_client", lambda: Fake())
+    c = w.client("admin")
+    p = w.product(w.seller())
+    w.db.commit()  # the API uses its own session; flushed rows are invisible to it
+    r = c.post("/api/orders", json={"customer_id": "c", "customer_email": "b@example.com", "lines": [{"product_id": str(p.id), "qty": 1}]})
+    assert r.status_code == 200, r.text
+    o = r.json()["order"]
+    a = c.post("/api/paypal/orders", json={"order_id": o["id"]}).json()
+    b = c.post("/api/paypal/orders", json={"order_id": o["id"]}).json()
+    assert len(set(ids)) == 2 and a["paypal_order_id"] != b["paypal_order_id"]
+
+
 # ---------------------------------------------------------------- DisputePilot
 def mk_dispute(w, order, reason="MERCHANDISE_OR_SERVICE_NOT_RECEIVED", due_hours=72, simulated=False):
     d = Dispute(org_id=w.org.id, paypal_dispute_id=f"PP-{uuid.uuid4().hex[:6]}", order_id=order.id, seller_id=None, capture_id="CAP-1", reason=reason,
