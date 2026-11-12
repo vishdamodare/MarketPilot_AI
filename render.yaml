@@ -4,6 +4,7 @@ services:
   - type: web
     name: marketpilot-api
     region: singapore   # same region as the Neon database
+    plan: free          # sleeps after ~15 min idle (stops the background sync); use starter for always-on
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
