@@ -3,6 +3,7 @@
 services:
   - type: web
     name: marketpilot-api
+    region: singapore   # same region as the Neon database
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
